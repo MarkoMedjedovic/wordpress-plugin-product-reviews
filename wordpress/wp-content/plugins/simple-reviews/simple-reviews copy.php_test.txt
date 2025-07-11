@@ -1,0 +1,125 @@
+<?php
+/**
+ * Plugin Name: Simple Reviews
+ * Description: Registers a product reviews CPT, REST API endpoints, and shortcode to display reviews.
+ * Version: 1.0.1
+ * Author: Your Name
+ */
+
+if (!defined('ABSPATH')) {
+    exit;  
+}
+ 
+class Simple_Reviews { 
+    public function __construct() {
+        add_action('init', [$this, 'register_product_review_cpt']);
+        add_action('rest_api_init', [$this, 'register_rest_routes']);
+        add_shortcode('product_reviews', [$this, 'display_product_reviews']);
+    }
+
+    public function register_product_review_cpt() {
+
+        $args = [
+            'labels'             => 
+            [
+                'name'               => 'Product Reviews',
+                'singular_name'      => 'Product Review',
+            ],
+            'public'             => true,
+            'has_archive'        => true,
+            'supports'           => ['title', 'editor', 'custom-fields'],
+            'show_in_rest'       => true,
+            'menu_position'      => 20,
+            'menu_icon'          => 'dashicons-star-filled',
+        ];
+
+        register_post_type('product_review', $args);
+    }
+
+    public function register_rest_routes() {
+        register_rest_route('mock-api/v1', '/sentiment/', [
+            'methods'             => 'POST',
+            'callback'            => [$this, 'analyze_sentiment'],
+            'permission_callback' => '__return_true',
+        ]);
+
+        register_rest_route('mock-api/v1', '/review-history/', [
+            'methods'             => 'GET',
+            'callback'            => [$this, 'get_review_history'],
+            'permission_callback' => '__return_true',
+        ]);
+    }
+
+    public function analyze_sentiment($request) {
+        $params = $request->get_json_params();
+        $text = isset($params['text']) ? sanitize_text_field($params['text']) : '';
+
+        if (empty($text)) {
+            return new WP_Error('empty_text', 'No text provided for analysis.', ['status' => 400]);
+        }
+
+        $sentiment_scores = ['positive' => 0.9, 'negative' => 0.2, 'neutral' => 0.5];
+        $random_sentiment = array_rand($sentiment_scores);
+
+        return rest_ensure_response([
+            'sentiment' => $random_sentiment,
+            'score'     => $sentiment_scores[$random_sentiment],
+        ]);
+    }
+
+    public function get_review_history() {
+        $reviews = get_posts([
+            'post_type'      => 'product_review',
+            'posts_per_page' => 5,
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+        ]);
+
+        $response = [];
+        foreach ($reviews as $review) {
+            $response[] = [
+                'id'        => $review->ID,
+                'title'     => $review->post_title,
+                'sentiment' => get_post_meta($review->ID, 'sentiment', true) ?: 'neutral',
+                'score'     => get_post_meta($review->ID, 'sentiment_score', true) ?: 0.5,
+            ];
+        }
+
+        return rest_ensure_response($response);
+    }
+
+    public function display_product_reviews() {
+        $reviews = get_posts([
+            'post_type'      => 'product_review',
+            'posts_per_page' => 5,
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+        ]);
+
+        $output = '<style>
+            .review-positive { color: green; font-weight: bold; }
+            .review-negative { color: red; font-weight: bold; }
+            .review-neutral { color: gray; }
+            ul.product-reviews { list-style-type: disc; padding-left: 20px; }
+        </style>';
+
+        $output .= '<ul class="product-reviews">';
+        foreach ($reviews as $review) {
+            $sentiment = get_post_meta($review->ID, 'sentiment', true) ?: 'neutral';
+            $sentiment_score = get_post_meta($review->ID, 'sentiment_score', true) ?: '0.5';
+            $class = 'review-' . esc_attr($sentiment);
+            $output .= sprintf(
+                '<li class="%s">%s (Sentiment: %s, Score: %s )</li>',
+                $class,
+                esc_html($review->post_title),
+                esc_html($sentiment),
+                esc_html($sentiment_score)
+            );
+        }
+        $output .= '</ul>';
+
+        return $output;
+    }
+}
+
+new Simple_Reviews();

@@ -12,7 +12,9 @@ if (!defined('ABSPATH')) {
 
 class Simple_Reviews {
     public function __construct() {
-        add_action('init', [$this, 'register_product_review_cpt']);        
+        add_action('init', [$this, 'register_product_review_cpt']);  
+        add_action('init_rest_api' , [$this, 'register_rest_routes']);
+        add_shortcode('product_reviews' , [$this, 'display_product_reviews']);
     }
 
  
@@ -25,6 +27,11 @@ class Simple_Reviews {
             'public'      => true,
             'supports'    => ['title', 'editor', 'custom-fields'],
             'show_in_rest' => true,
+            'capability_type' => 'post',
+            'menu_position' => 5,
+            'show_ui'       => true,
+            'has_archive'   => true,
+            'show_in_nav_menus' => true
         ]);
     }
 
@@ -34,6 +41,8 @@ class Simple_Reviews {
             'callback' => [$this, 'analyze_sentiment'],
             'permission_callback' => '__return_true',
         ]);
+
+        // curl http://localhost:8080/hello-world/mock-api/v1/review-history/
 
         register_rest_route('mock-api/v1', '/review-history/', [
             'methods'  => 'GET',
@@ -92,13 +101,15 @@ class Simple_Reviews {
         $output .= '<ul>';
         foreach ($reviews as $review) {
             $sentiment = get_post_meta($review->ID, 'sentiment', true) ?? 'neutral';
+            $sentiment_score = get_post_meta($review->ID, 'sentiment_score', true) ?? '0.5';
             $class = ($sentiment === 'positive') ? 'review-positive' : (($sentiment === 'negative') ? 'review-negative' : '');
-            $output .= "<li class='$class'>{$review->post_title} (Sentiment: $sentiment)</li>";
+            $output .= "<li class='$class'>{$review->post_title} (Sentiment: $sentiment, Sentiment score: $sentiment_score)</li>";
         }
         $output .= '</ul>';
 
         return $output;
     }
+
 }
 
 new Simple_Reviews();
