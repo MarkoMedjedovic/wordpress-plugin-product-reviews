@@ -15,6 +15,7 @@ class Simple_Reviews {
         add_action('init', [$this, 'register_product_review_cpt']);  
         add_action('rest_api_init', [$this, 'register_rest_routes']);
         add_shortcode('product_reviews' , [$this, 'display_product_reviews']);
+ 
     }
 
  
@@ -36,6 +37,9 @@ class Simple_Reviews {
     }
 
     public function register_rest_routes() {
+
+        //curl http://localhost:8080/wp-json/mock-api/v1/sentiment/
+
         register_rest_route('mock-api/v1', '/sentiment/', [
             'methods'  => 'POST',
             'callback' => [$this, 'analyze_sentiment'],
@@ -47,6 +51,14 @@ class Simple_Reviews {
         register_rest_route('mock-api/v1', '/review-history/', [
             'methods'  => 'GET',
             'callback' => [$this, 'get_review_history'],
+            'permission_callback' => '__return_true',
+        ]);
+
+        //curl http://localhost:8080/wp-json/mock-api/v1/outliers/
+
+        register_rest_route('mock-api/v1', '/outliers/', [
+            'methods'  => 'GET',
+            'callback' => [$this, 'detect_outlier_reviews'],
             'permission_callback' => '__return_true',
         ]);
 
@@ -110,6 +122,44 @@ class Simple_Reviews {
 
         return $output;
     }
+
+    public function detect_outlier_reviews() {
+        $reviews = get_posts([
+            'post_type' => 'product_review',
+            'posts_per_page' => -1,
+        ]);
+
+        if (empty($reviews)) {
+            return rest_ensure_response([]);
+        }
+
+        $scores = [];
+        foreach ($reviews as $review) {
+            $scores[$review->ID] = (float) get_post_meta($review->ID, 'sentiment_score', true) ?? 0.5;
+        }
+
+        $mean = array_sum($scores) / count($scores);
+        $threshold = 0.3;
+
+        $outliers = [];
+        foreach ($scores as $id => $score) {
+            if (abs($score - $mean) > $threshold) {
+                $outliers[] = [
+                    'id' => $id,
+                    'title' => get_the_title($id),
+                    'score' => $score,
+                    'sentiment' => get_post_meta($id, 'sentiment', true) ?? 'neutral',
+                    'deviation' => round(abs($score - $mean), 3)
+                ];
+            }
+        }
+
+        return rest_ensure_response([
+            'mean' => round($mean, 3),
+            'outliers' => $outliers
+        ]);
+    }
+
 
 }
 
