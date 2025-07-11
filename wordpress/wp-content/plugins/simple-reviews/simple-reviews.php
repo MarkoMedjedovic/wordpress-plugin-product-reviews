@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
 class Simple_Reviews {
     public function __construct() {
         add_action('init', [$this, 'register_product_review_cpt']);  
-        add_action('init_rest_api' , [$this, 'register_rest_routes']);
+        add_action('rest_api_init', [$this, 'register_rest_routes']);
         add_shortcode('product_reviews' , [$this, 'display_product_reviews']);
     }
 
@@ -42,13 +42,14 @@ class Simple_Reviews {
             'permission_callback' => '__return_true',
         ]);
 
-        // curl http://localhost:8080/hello-world/mock-api/v1/review-history/
+        //curl http://localhost:8080/wp-json/mock-api/v1/review-history
 
         register_rest_route('mock-api/v1', '/review-history/', [
             'methods'  => 'GET',
             'callback' => [$this, 'get_review_history'],
             'permission_callback' => '__return_true',
         ]);
+
     }
 
     public function analyze_sentiment($request) {
